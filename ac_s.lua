@@ -35,6 +35,21 @@ Users = {}
 recentExplosions = {}
 recentEvents = {}
 
+function GetPlayerNeededIdentifiers(player)
+	local ids = GetPlayerIdentifiers(player)
+	for i,theIdentifier in ipairs(ids) do
+		if string.find(theIdentifier,"license:") or -1 > -1 then
+			license = theIdentifier
+		elseif string.find(theIdentifier,"steam:") or -1 > -1 then
+			steam = theIdentifier
+		end
+	end
+	if not steam then
+		steam = "steam: missing"
+	end
+	return license, steam
+end
+
 RegisterCommand("ac_scramble", function()
 	Citizen.CreateThread(function()
 		local clientScript = LoadResourceFile(GetCurrentResourceName(), "ac_c.lua")
@@ -345,21 +360,6 @@ function WarnPlayer(playerId, reason, banInstantly)
 end
 
 Citizen.CreateThread(function()
-	
-	function GetPlayerNeededIdentifiers(player)
-		local ids = GetPlayerIdentifiers(player)
-		for i,theIdentifier in ipairs(ids) do
-			if string.find(theIdentifier,"license:") or -1 > -1 then
-				license = theIdentifier
-			elseif string.find(theIdentifier,"steam:") or -1 > -1 then
-				steam = theIdentifier
-			end
-		end
-		if not steam then
-			steam = "steam: missing"
-		end
-		return license, steam
-	end
 	
 	RegisterServerEvent('AntiCheese:SpeedFlag')
 	AddEventHandler('AntiCheese:SpeedFlag', function(rounds, roundm)
