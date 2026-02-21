@@ -319,6 +319,100 @@ function SendWebhookMessage(wh,message)
 	end
 end
 
+function AC_GetBanBackend()
+	local systems = {
+		easyadmin = {"EasyAdmin", "easyadmin", "EasyAdminBundle"},
+		bansql = {"bansql", "BanSql", "FiveM-BanSql", "FiveM-BanSql-master"}
+	}
+
+	for systemName, resources in pairs(systems) do
+		for _, resourceName in ipairs(resources) do
+			if GetResourceState(resourceName) == "started" then
+				return systemName, resourceName
+			end
+		end
+	end
+
+	return "none", nil
+end
+
+function AC_HasCommand(commandName)
+	local commands = GetRegisteredCommands()
+	local wanted = string.lower(tostring(commandName or ""))
+
+	for _, cmd in ipairs(commands) do
+		if string.lower(tostring(cmd.name or "")) == wanted then
+			return true
+		end
+	end
+
+	return false
+end
+
+function AC_TryTxAdminBan(playerId, reason)
+	local target = tonumber(playerId)
+	if not target or target <= 0 then
+		return false
+	end
+
+	local safeReason = tostring(reason or "Cheating")
+	safeReason = safeReason:gsub("[\r\n]", " "):gsub('"', "")
+
+	if AC_HasCommand("txaBan") then
+		ExecuteCommand(("txaBan %d \"%s\""):format(target, safeReason))
+		return true
+	end
+
+	if AC_HasCommand("txaKick") then
+		ExecuteCommand(("txaKick %d \"%s\""):format(target, safeReason))
+		return true
+	end
+
+	return false
+end
+
+function AC_TakeScreenshot(playerId)
+	local banSystem, banResource = AC_GetBanBackend()
+
+	if banSystem == "easyadmin" then
+		TriggerEvent("EasyAdmin:TakeScreenshot", playerId)
+		return
+	end
+
+	if banSystem == "bansql" then
+		if banResource then
+			exports[banResource]:takeScreenshot(playerId)
+			return
+		end
+	end
+end
+
+function AC_AddBan(playerId, reason)
+	local banReason = reason or "Cheating"
+	local banSystem, banResource = AC_GetBanBackend()
+
+	if banSystem == "easyadmin" then
+		TriggerEvent("EasyAdmin:addBan", playerId, banReason)
+		return
+	end
+
+	if banSystem == "bansql" then
+		if banResource then
+			exports[banResource]:addBan(playerId, banReason)
+			return
+		end
+
+		print("[AntiCheese] BanSql detected but no started resource found for addBan export")
+		return
+	end
+
+	if AC_TryTxAdminBan(playerId, banReason) then
+		return
+	end
+
+	DropPlayer(playerId, banReason)
+end
+
 function WarnPlayer(playerId, reason, banInstantly)
 	local isKnownCount = 1
 	local isKnownExtraText = ""
@@ -327,16 +421,16 @@ function WarnPlayer(playerId, reason, banInstantly)
 		if ourUser.alreadyBanned then return false, -1, "Player was no longer on the server(already banned?)", true end
 		local violations = ourUser.violations
 		if banInstantly then
-			TriggerEvent("EasyAdmin:addBan", playerId,"Cheating")
+			AC_AddBan(playerId, "Cheating")
 			isKnownExtraText = ", was banned instantly."
 			ourUser.alreadyBanned = true 
 			return true, isKnownCount,isKnownExtraText
 		else
 			if ourUser.violations == 1 then
-				TriggerEvent("EasyAdmin:TakeScreenshot", playerId)
+				AC_TakeScreenshot(playerId)
 				ourUser.violations = ourUser.violations+1
 			elseif ourUser.violations == 3 then
-				TriggerEvent("EasyAdmin:addBan", pid or source,"Cheating")
+				AC_AddBan(pid or source, "Cheating")
 				isKnownExtraText = ", was banned."
 				ourUser.alreadyBanned = true 
 			else
@@ -350,7 +444,7 @@ function WarnPlayer(playerId, reason, banInstantly)
 		local violations = ourUser.violations
 		isKnownCount = violations
 		if banInstantly then
-			TriggerEvent("EasyAdmin:addBan", playerId,"Cheating")
+			AC_AddBan(playerId, "Cheating")
 			isKnownExtraText = ", was banned instantly."
 			ourUser.alreadyBanned = true 
 			return true, isKnownCount,isKnownExtraText
